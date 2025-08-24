@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Laundry Booking</title>
+  <style>
+    body { font-family: sans-serif; max-width: 920px; margin: auto; padding: 20px; }
+    h2 { margin-top: 0; }
+    input[type="text"], input[type="date"], select {
+      width: 100%; margin-bottom: 10px; padding: 8px; font-size: 16px; box-sizing: border-box;
+    }
+    button { padding: 10px; background: #1f9d55; color: white; border: none; font-size: 16px; cursor: pointer; margin-bottom: 10px; border-radius:6px; }
+    button.secondary { background:#666; }
+    .row { display:flex; gap:20px; }
+    .col { flex:1; }
+    .cancel-button { background: red; color: white; border: none; padding: 4px 8px; font-size: 12px; margin-left: 10px; cursor: pointer; border-radius: 4px; }
+    .reset-button { background: gray; margin-top: 10px; width:auto; padding:8px 12px; border-radius:6px; }
+    .error { color: red; font-size: 14px; margin-bottom: 10px; }
+    #weekDisplay { font-weight: bold; font-size: 18px; margin: 10px 0 20px; }
+    .status-processing { color: orange; font-weight: bold; }
+    .status-paid { color: blue; font-weight: bold; }
+    .status-completed { color: green; font-weight: bold; }
+    .today-badge { color: green; font-size: 12px; margin-left: 5px; }
+    .small { font-size: 13px; color: #555; margin-bottom: 8px; }
+    ul { padding-left: 18px; margin-top: 6px; }
+    label { display:block; font-size:14px; margin-bottom:4px; }
+    .controls { display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .controls select, .controls input { flex:1; min-width: 180px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding:6px 8px; border-bottom: 1px solid #eee; }
+    .legend { margin:10px 0; font-size:14px; }
+    .badge { display:inline-block; padding:2px 6px; border-radius:4px; font-size:12px; margin-right:6px; }
+    .badge.processing { background: #fff3cd; color:#856404; }
+    .badge.paid { background: #cfe2ff; color:#084298; }
+    .badge.completed { background: #d1e7dd; color:#0f5132; }
+    .top-row { display:flex; gap:16px; align-items:center; margin-bottom:12px; }
+    @media (max-width:900px) { .top-row { flex-direction: column; } .controls { flex-direction: column; align-items: stretch; } }
+
+    /* ---------------------------
+       Spacing: Name + Room side-by-side
+       --------------------------- */
+    .form-row {
+      display: flex;
+      gap: 18px;
+      margin-top: 6px;
+      align-items: flex-start;
+    }
+    .form-row .field {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .form-row label { margin-bottom: 6px; font-size: 14px; }
+    @media (max-width: 600px) {
+      .form-row { flex-direction: column; gap: 10px; }
+    }
+
+    /* small utility */
+    .muted { color:#666; font-size:13px; }
+
+    /* ===== ADMIN VISIBILITY TOGGLE ===== */
+    .admin-only { display: none; }
+    body.admin .admin-only { display: block; }
+
+    /* ===== compact edit UI for status ===== */
+    .small-actions { display:inline-flex; gap:6px; align-items:center; }
+    .edit-btn { padding:4px 8px; font-size:12px; border-radius:6px; cursor:pointer; background:#0d6efd; color:white; border:none; }
+    .status-dropdown-compact { display:none; font-size:13px; padding:3px 6px; border-radius:6px; }
+    .status-text { margin-right:8px; }
+    .booking-li { margin-bottom:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .booking-li .meta { color:#333; font-size:14px; }
+    .booking-li .meta .ref { color:#666; font-size:13px; margin-left:6px; }
+    .booking-li button.cancel-button { margin-left:8px; }
+    @media (max-width:600px) {
+      .booking-li { flex-direction: column; align-items:flex-start; }
+      .small-actions { margin-top:6px; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Accomm Laundry Reservation</h2>
+  <div class="small">Select machine, pick a future date, then choose time (schedule depends on machine & weekday).</div>
+
+  <!-- Booking form -->
+  <div class="top-row">
+    <div style="flex:1">
+      <label for="machine">Machine</label>
+      <select id="machine">
+        <option>Brothers Washer</option>
+        <option>Brothers Dryer</option>
+        <option>Sisters Washer</option>
+        <option>Sisters Dryer</option>
+      </select>
+    </div>
+
+    <!-- Name & Room grouped with spacing -->
+    <div style="flex:2">
+      <div class="form-row">
+        <div class="field">
+          <label for="name">Name</label>
+          <input type="text" id="name" placeholder="Your Name and FT" />
+        </div>
+        <div class="field">
+          <label for="room">Room</label>
+          <input type="text" id="room" placeholder="Room Number" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <label for="date">Date</label>
+      <input type="date" id="date" onchange="updateTimeSlots()" />
+    </div>
+    <div class="col">
+      <label for="time">Time slot</label>
+      <select id="time">
+        <option value="">-- Select a Time Slot --</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="error" id="errorMessage"></div>
+  <button onclick="startBooking()">Book Slot</button>
+
+  <!-- Payment Dialog -->
+  <dialog id="paymentDialog">
+    <h3>Step 2: GCash Payment</h3>
+    <p><strong>GCash Number:</strong> 0916-421-9818</p>
+    <p><img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR Code" style="width:100%; max-width:250px;"></p>
+    <input type="text" id="reference" placeholder="Enter GCash Reference Number" />
+    <div style="text-align:right; margin-top: 12px;">
+      <button onclick="proceedToConfirmation()">Next</button>
+      <button class="secondary" onclick="document.getElementById('paymentDialog').close()">Cancel</button>
+    </div>
+  </dialog>
+
+  <!-- Confirmation Dialog -->
+  <dialog id="confirmDialog">
+    <h3>Step 3: Confirm Booking</h3>
+    <p><strong>Machine:</strong> <span id="cMachine"></span></p>
+    <p><strong>Name:</strong> <span id="cName"></span></p>
+    <p><strong>Room:</strong> <span id="cRoom"></span></p>
+    <p><strong>Date:</strong> <span id="cDate"></span></p>
+    <p><strong>Time:</strong> <span id="cTime"></span></p>
+    <p><strong>Reference:</strong> <span id="cRef"></span></p>
+    <div style="text-align:right; margin-top: 12px;">
+      <button onclick="confirmBooking()">Confirm</button>
+      <button class="secondary" onclick="document.getElementById('confirmDialog').close()">Cancel</button>
+    </div>
+  </dialog>
+
+  <hr>
+
+  <!-- Controls for viewing schedule -->
+  <div class="controls">
+    <select id="viewMachine" class="admin-only" onchange="renderBookings()">
+      <option>Brothers Washer</option>
+      <option>Brothers Dryer</option>
+      <option>Sisters Washer</option>
+      <option>Sisters Dryer</option>
+    </select>
+
+    <select id="weekSelector" class="admin-only" onchange="renderBookings()"></select>
+
+    <button id="adminLoginBtn" onclick="loginAsAdmin()">🔐 Admin</button>
+    <button id="adminLogoutBtn" onclick="logoutAdmin()" style="display:none;">🚪 Logout</button>
+
+    <button id="exportCSVBtn" style="display:none; background:#007bff">Export CSV</button>
+    <!-- NEW: Send to Google Sheet (admin only; shown after login) -->
+    <button id="sendToSheetBtn" style="display:none; background:#34a853">Send to Google Sheet</button>
+  </div>
+
+  <div id="weekDisplay" class="admin-only"></div>
+  <div class="legend admin-only">
+    <span class="badge processing">Processing</span>
+    <span class="badge paid">Paid</span>
+    <span class="badge completed">Completed</span>
+  </div>
+
+  <div class="bookings admin-only"><h3>Weekly Booking Schedule</h3><div id="weeklySchedule"></div></div>
+
+  <button id="resetBookingsBtn" class="reset-button" style="display:none;" onclick="resetAllBookings()">Reset All Bookings</button>
+
+  <!-- Admin Dialog -->
+  <dialog id="adminDialog">
+    <form method="dialog" id="adminForm">
+      <h3>Admin Login</h3>
+      <input type="password" id="adminPassword" placeholder="Enter password" />
+      <div style="text-align:right; margin-top:8px;">
+        <button type="submit">Login</button>
+        <button type="button" onclick="document.getElementById('adminDialog').close()" class="secondary">Cancel</button>
+      </div>
+      <div id="adminError" class="error"></div>
+    </form>
+  </dialog>
+
+<script>
+/* ====================
+   SCHEDULES (edit as needed)
+   ==================== */
+const schedules = {
+  "Brothers Washer": {
+    "Sunday": ["8:00 AM - 9:00 AM","9:00 AM - 10:00 AM"],
+    "Monday": ["8:30 AM - 9:30 AM","9:30 AM - 10:30 AM","10:30 AM - 11:30 AM"],
+    "Tuesday": ["1:00 PM - 2:00 PM","2:00 PM - 3:00 PM"],
+    "Wednesday": ["8:00 AM - 9:00 AM","9:00 AM - 10:00 AM"],
+    "Thursday": ["3:00 PM - 4:00 PM"],
+    "Friday": ["8:00 AM - 9:00 AM","9:00 AM - 10:00 AM"],
+    "Saturday": ["10:00 AM - 11:00 AM"]
+  },
+  "Brothers Dryer": {
+    "Sunday": ["8:15 AM - 9:00 AM","9:15 AM - 10:00 AM"],
+    "Monday": ["8:45 AM - 9:30 AM","9:45 AM - 10:30 AM"],
+    "Tuesday": ["1:15 PM - 2:00 PM","2:15 PM - 3:00 PM"],
+    "Wednesday": ["8:15 AM - 9:00 AM"],
+    "Thursday": ["3:15 PM - 4:00 PM"],
+    "Friday": ["8:15 AM - 9:00 AM"],
+    "Saturday": ["10:15 AM - 11:00 AM"]
+  },
+  "Sisters Washer": {
+    "Sunday": [],
+    "Monday": ["1:00 PM - 2:00 PM","2:00 PM - 3:00 PM"],
+    "Tuesday": ["7:00 AM - 8:00 AM"],
+    "Wednesday": ["1:00 PM - 2:00 PM"],
+    "Thursday": ["4:00 PM - 5:00 PM"],
+    "Friday": ["2:00 PM - 3:00 PM"],
+    "Saturday": ["9:00 AM - 10:00 AM"]
+  },
+  "Sisters Dryer": {
+    "Sunday": [],
+    "Monday": ["1:30 PM - 2:15 PM","2:30 PM - 3:15 PM"],
+    "Tuesday": ["7:30 AM - 8:15 AM"],
+    "Wednesday": ["1:30 PM - 2:15 PM"],
+    "Thursday": ["4:15 PM - 5:00 PM"],
+    "Friday": ["2:30 PM - 3:15 PM"],
+    "Saturday": ["9:30 AM - 10:15 AM"]
+  }
+};
+
+/* ====================
+   App state
+   ==================== */
+let isAdmin = false;
+let bookings = JSON.parse(localStorage.getItem("bookings") || "[]");
+let tempBooking = {};
+
+/* ====================
+   Helpers
+   ==================== */
+function pad(n){ return n<10?'0'+n:n; }
+
+function weekdayNameFromDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()];
+}
+function convertStartTo24(timeSlotStart) {
+  const parts = timeSlotStart.trim().split(" ");
+  if (parts.length < 2) return null;
+  const [time, ampm] = parts;
+  let [h,m] = time.split(":");
+  h = parseInt(h,10);
+  m = parseInt(m||0,10);
+  if (ampm.toUpperCase() === "PM" && h !== 12) h += 12;
+  if (ampm.toUpperCase() === "AM" && h === 12) h = 0;
+  return `${pad(h)}:${pad(m)}:00`;
+}
+function slotStartFromRange(rangeStr) {
+  return rangeStr.split("-")[0].trim();
+}
+
+/* ====================
+   Week range (baseline Monday)
+   ==================== */
+function getWeekRange(weekIndex = 0) {
+  const base = new Date("2025-08-04"); // Monday baseline
+  const start = new Date(base);
+  start.setDate(base.getDate() + weekIndex * 7);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start, end };
+}
+
+/* ====================
+   Populate week dropdown
+   ==================== */
+function populateWeekDropdown() {
+  const selector = document.getElementById("weekSelector");
+  selector.innerHTML = "";
+  const today = new Date(); today.setHours(0,0,0,0);
+  let currentWeekIndex = 0;
+  for (let i = 0; i < 24; i++) {
+    const range = getWeekRange(i);
+    const rstart = new Date(range.start); rstart.setHours(0,0,0,0);
+    const rend = new Date(range.end); rend.setHours(0,0,0,0);
+    const isCurrent = today >= rstart && today <= rend;
+    const option = document.createElement("option");
+    option.value = i;
+    option.text = `Week ${i+1} (${range.start.toLocaleDateString()} - ${range.end.toLocaleDateString()})${isCurrent ? " (Current)" : ""}`;
+    if (isCurrent) currentWeekIndex = i;
+    selector.appendChild(option);
+  }
+  selector.value = currentWeekIndex;
+}
+
+/* ====================
+   Update time slots whenever machine or date changes
+   ==================== */
+function updateTimeSlots() {
+  const dateVal = document.getElementById("date").value; // YYYY-MM-DD
+  const timeSelect = document.getElementById("time");
+  const machine = document.getElementById("machine").value;
+  const err = document.getElementById("errorMessage");
+  timeSelect.innerHTML = '<option value="">-- Select a Time Slot --</option>';
+  err.textContent = "";
+
+  if (!dateVal || !machine) return;
+
+  const weekday = weekdayNameFromDate(dateVal);
+  const machineSchedule = (schedules[machine] && schedules[machine][weekday]) || [];
+
+  if (!machineSchedule || machineSchedule.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = `No schedule for ${machine} on ${weekday}`;
+    opt.disabled = true;
+    timeSelect.appendChild(opt);
+    return;
+  }
+
+  const now = new Date();
+  const selectedDay = new Date(dateVal + "T00:00:00");
+
+  machineSchedule.forEach(slot => {
+    const option = document.createElement("option");
+    option.value = slot;
+    option.textContent = slot;
+
+    // disable if already booked for this machine+date+time
+    const isBooked = bookings.some(b => b.machine === machine && b.date === dateVal && b.time === slot);
+    if (isBooked) {
+      option.disabled = true;
+      option.textContent += " (Booked)";
+      timeSelect.appendChild(option);
+      return;
+    }
+
+    // If selecting today, disable past time slots by comparing start time
+    const slotStart = slotStartFromRange(slot);
+    if (selectedDay.toDateString() === now.toDateString()) {
+      const start24 = convertStartTo24(slotStart);
+      const slotDateTime = new Date(`${dateVal}T${start24}`);
+      if (slotDateTime < now) {
+        option.disabled = true;
+        option.textContent += " (Past)";
+      }
+    }
+
+    timeSelect.appendChild(option);
+  });
+}
+
+/* ====================
+   Booking flow
+   ==================== */
+function startBooking() {
+  const name = document.getElementById("name").value.trim();
+  const room = document.getElementById("room").value.trim();
+  const date = document.getElementById("date").value;
+  const time = document.getElementById("time").value;
+  const machine = document.getElementById("machine").value;
+  const error = document.getElementById("errorMessage");
+  error.textContent = "";
+
+  if (!name || !room || !date || !time || !machine) {
+    error.textContent = "Please complete all fields first.";
+    return;
+  }
+
+  // Block same-day or past-day bookings
+  const today = new Date(); const sel = new Date(date + "T00:00:00");
+  today.setHours(0,0,0,0); sel.setHours(0,0,0,0);
+  if (sel <= today) {
+    error.textContent = "Same-day or past bookings are not allowed. Please choose a future date.";
+    return;
+  }
+
+  // Prevent booking a time already booked for this machine
+  const conflict = bookings.some(b => b.machine === machine && b.date === date && b.time === time);
+  if (conflict) {
+    error.textContent = "This time slot is already booked for the selected machine.";
+    return;
+  }
+
+  tempBooking = { id: 'b_' + Date.now() + '_' + Math.floor(Math.random()*1000), machine, name, room, date, time, reference: "", status: "Processing" };
+  document.getElementById("paymentDialog").showModal();
+}
+
+function proceedToConfirmation() {
+  const ref = document.getElementById("reference").value.trim();
+  if (!ref) return alert("Please enter GCash reference number.");
+  tempBooking.reference = ref;
+
+  document.getElementById("cMachine").textContent = tempBooking.machine;
+  document.getElementById("cName").textContent = tempBooking.name;
+  document.getElementById("cRoom").textContent = tempBooking.room;
+  document.getElementById("cDate").textContent = tempBooking.date;
+  document.getElementById("cTime").textContent = tempBooking.time;
+  document.getElementById("cRef").textContent = tempBooking.reference;
+
+  document.getElementById("paymentDialog").close();
+  document.getElementById("confirmDialog").showModal();
+}
+
+function confirmBooking() {
+  bookings.push(tempBooking);
+  localStorage.setItem("bookings", JSON.stringify(bookings));
+  document.getElementById("confirmDialog").close();
+  alert("Booking confirmed!");
+  // clear form inputs
+  document.getElementById("name").value = "";
+  document.getElementById("room").value = "";
+  document.getElementById("date").value = "";
+  document.getElementById("time").innerHTML = '<option value="">-- Select a Time Slot --</option>';
+  document.getElementById("reference").value = "";
+  renderBookings();
+}
+
+/* ====================
+   Render weekly bookings for selected viewMachine
+   (with compact inline edit dropdown triggered by Edit button)
+   ==================== */
+function renderBookings() {
+  const weekIndex = parseInt(document.getElementById("weekSelector").value || 0);
+  const range = getWeekRange(weekIndex);
+  const weekStart = range.start;
+  const weeklyDiv = document.getElementById("weeklySchedule");
+  const weekDisplay = document.getElementById("weekDisplay");
+
+  if (!isAdmin) {
+    if (weeklyDiv) weeklyDiv.innerHTML = "";
+    if (weekDisplay) weekDisplay.textContent = "";
+    return;
+  }
+
+  weeklyDiv.innerHTML = "";
+  weekDisplay.textContent = `Showing bookings for: ${range.start.toLocaleDateString()} – ${range.end.toLocaleDateString()}`;
+
+  const viewMachine = document.getElementById("viewMachine").value;
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  for (let i=0;i<7;i++){
+    const thisDate = new Date(weekStart);
+    thisDate.setDate(weekStart.getDate() + i);
+    const thisDateStr = thisDate.toDateString();
+    const ymd = `${thisDate.getFullYear()}-${pad(thisDate.getMonth()+1)}-${pad(thisDate.getDate())}`;
+    const isToday = thisDateStr === today.toDateString();
+
+    const dayHeader = document.createElement("h4");
+    dayHeader.innerHTML = `${days[thisDate.getDay()]} ${isToday ? '<span class="today-badge">(Today)</span>' : ''}`;
+
+    const dayBlock = document.createElement("div");
+    dayBlock.appendChild(dayHeader);
+
+    // filter bookings for this date AND machine
+    const dayBookings = bookings
+      .map((b) => ({ ...b }))
+      .filter(b => b.machine === viewMachine && b.date === ymd)
+      .sort((a,b) => a.time.localeCompare(b.time));
+
+    if (dayBookings.length === 0) {
+      const p = document.createElement("p"); p.textContent = "No bookings."; dayBlock.appendChild(p);
+    } else {
+      const ul = document.createElement("ul");
+      dayBookings.forEach(b => {
+        const li = document.createElement("li");
+        li.className = "booking-li";
+
+        // main text
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.innerHTML = `<strong>${b.time}</strong> — ${b.name} (Room ${b.room}) <span class="ref">Ref: ${b.reference || '(none)'}</span>`;
+        li.appendChild(meta);
+
+        // status text
+        const statusSpan = document.createElement("span");
+        const statusClass = b.status.toLowerCase();
+        statusSpan.className = `status-text status-${statusClass}`;
+        statusSpan.textContent = b.status;
+        
+        // actions container
+        const actions = document.createElement("div");
+        actions.className = "small-actions";
+        actions.appendChild(statusSpan);
+
+        if (isAdmin) {
+          // Edit button
+          const editBtn = document.createElement("button");
+          editBtn.className = "edit-btn";
+          editBtn.type = "button";
+          editBtn.textContent = "Edit";
+          actions.appendChild(editBtn);
+
+          // compact select (hidden by default)
+          const select = document.createElement("select");
+          select.className = "status-dropdown-compact";
+          ["Processing","Paid","Completed"].forEach(s => {
+            const opt = document.createElement("option");
+            opt.value = s; opt.text = s;
+            if (b.status === s) opt.selected = true;
+            select.appendChild(opt);
+          });
+          actions.appendChild(select);
+
+          // Cancel booking
+          const cancelBtn = document.createElement("button");
+          cancelBtn.className = "cancel-button";
+          cancelBtn.type = "button";
+          cancelBtn.textContent = "Cancel";
+          cancelBtn.onclick = () => cancelBookingById(b.id);
+
+          // Wire Edit behavior
+          editBtn.onclick = () => {
+            editBtn.style.display = "none";
+            select.style.display = "inline-block";
+            select.focus();
+          };
+
+          select.onchange = () => {
+            updateStatusById(b.id, select.value);
+            select.style.display = "none";
+            editBtn.style.display = "inline-block";
+          };
+          select.onblur = () => {
+            setTimeout(()=> {
+              select.style.display = "none";
+              editBtn.style.display = "inline-block";
+            }, 150);
+          };
+
+          li.appendChild(actions);
+          li.appendChild(cancelBtn);
+        } else {
+          li.appendChild(actions);
+        }
+
+        ul.appendChild(li);
+      });
+      dayBlock.appendChild(ul);
+    }
+    weeklyDiv.appendChild(dayBlock);
+  }
+}
+
+/* ====================
+   Admin actions: id-based ops
+   ==================== */
+function cancelBookingById(id) {
+  if (!isAdmin) return alert("Only admin can cancel bookings.");
+  if (!confirm("Are you sure you want to cancel this booking?")) return;
+  bookings = bookings.filter(b => b.id !== id);
+  localStorage.setItem("bookings", JSON.stringify(bookings));
+  renderBookings();
+}
+
+function updateStatusById(id, status) {
+  const idx = bookings.findIndex(b => b.id === id);
+  if (idx === -1) return;
+  bookings[idx].status = status;
+  localStorage.setItem("bookings", JSON.stringify(bookings));
+  renderBookings();
+}
+
+/* ====================
+   Admin login/logout (show/hide admin-only UI)
+   ==================== */
+function loginAsAdmin() {
+  const dialog = document.getElementById("adminDialog");
+  const form = document.getElementById("adminForm");
+  const input = document.getElementById("adminPassword");
+  const error = document.getElementById("adminError");
+  input.value = ""; error.textContent = "";
+  dialog.showModal();
+
+  form.onsubmit = function(e) {
+    e.preventDefault();
+    if (input.value === "admin123") {
+      isAdmin = true;
+      document.body.classList.add("admin");
+      dialog.close();
+      document.getElementById("resetBookingsBtn").style.display = "inline-block";
+      document.getElementById("adminLoginBtn").style.display = "none";
+      document.getElementById("adminLogoutBtn").style.display = "inline-block";
+      document.getElementById("exportCSVBtn").style.display = "inline-block";
+      document.getElementById("sendToSheetBtn").style.display = "inline-block"; // NEW: show send-to-sheet
+      document.getElementById("viewMachine").value = document.getElementById("machine").value;
+      renderBookings();
+    } else {
+      error.textContent = "Incorrect password.";
+    }
+  };
+}
+
+function logoutAdmin() {
+  isAdmin = false;
+  document.body.classList.remove("admin");
+  document.getElementById("resetBookingsBtn").style.display = "none";
+  document.getElementById("adminLoginBtn").style.display = "inline-block";
+  document.getElementById("adminLogoutBtn").style.display = "none";
+  document.getElementById("exportCSVBtn").style.display = "none";
+  document.getElementById("sendToSheetBtn").style.display = "none"; // NEW: hide send-to-sheet
+  renderBookings();
+}
+
+function resetAllBookings() {
+  if (!confirm("Are you sure you want to delete ALL bookings? This cannot be undone.")) return;
+  bookings = [];
+  localStorage.setItem("bookings", JSON.stringify(bookings));
+  renderBookings();
+}
+
+/* ====================
+   Export to CSV for admin
+   ==================== */
+document.getElementById("exportCSVBtn").addEventListener("click", () => {
+  if (!isAdmin) return alert("Only admin can export.");
+  const rows = [["id","machine","name","room","date","time","reference","status"]];
+  bookings.forEach(b => rows.push([b.id,b.machine,b.name,b.room,b.date,b.time,b.reference,b.status]));
+  const csv = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = 'bookings.csv'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+/* ====================
+   Send ALL bookings to Google Sheet (admin)
+   ==================== */
+
+// Your deployed Apps Script Web App URL:
+const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxvbaaiJO_VAmzbk95oFh2_bpsZOt5fid-A5ExH-b_ekBKiAaO_v_R2hUPIqBk2TJU1Gg/exec";
+
+async function sendAllBookingsToGoogleSheet() {
+  if (!isAdmin) return alert("Only admin can send data.");
+
+  const btn = document.getElementById("sendToSheetBtn");
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
+  try {
+    // To avoid CORS preflight, use text/plain; Apps Script will still parse JSON OK.
+    const payload = { rows: bookings || [] };
+
+    const res = await fetch(SHEET_WEBAPP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload)
+    });
+
+    // Try to parse response (may succeed depending on CORS)
+    let msg = `Sent ${payload.rows.length} row(s) to Google Sheet.`;
+    try {
+      const data = await res.json();
+      if (data && data.ok && typeof data.inserted === "number") {
+        msg = `Sent ${data.inserted} row(s) to Google Sheet.`;
+      }
+    } catch(_) { /* ignore if opaque */ }
+
+    alert(msg);
+  } catch (err) {
+    console.error(err);
+    alert("Failed to send to Google Sheet. Please check the Web App deployment & console.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+document.getElementById("sendToSheetBtn").addEventListener("click", sendAllBookingsToGoogleSheet);
+
+/* ====================
+   Utilities & Init
+   ==================== */
+document.getElementById("machine").addEventListener("change", updateTimeSlots);
+document.getElementById("date").addEventListener("change", updateTimeSlots);
+document.getElementById("viewMachine").addEventListener("change", renderBookings);
+
+// Normalize old bookings and ensure id/status exist:
+bookings = bookings.map(b => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) {
+    const d = new Date(b.date);
+    if (!isNaN(d)) {
+      b.date = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    }
+  }
+  if (!b.id) b.id = 'b_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+  if (!b.status) b.status = "Processing";
+  return b;
+});
+
+populateWeekDropdown();
+renderBookings();
+</script>
+</body>
+</html>
