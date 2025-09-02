@@ -36,34 +36,16 @@
     .top-row { display:flex; gap:16px; align-items:center; margin-bottom:12px; }
     @media (max-width:900px) { .top-row { flex-direction: column; } .controls { flex-direction: column; align-items: stretch; } }
 
-    /* ---------------------------
-       Spacing: Name + Room side-by-side
-       --------------------------- */
-    .form-row {
-      display: flex;
-      gap: 18px;
-      margin-top: 6px;
-      align-items: flex-start;
-    }
-    .form-row .field {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-    }
+    .form-row { display: flex; gap: 18px; margin-top: 6px; align-items: flex-start; }
+    .form-row .field { flex: 1; min-width: 0; display: flex; flex-direction: column; }
     .form-row label { margin-bottom: 6px; font-size: 14px; }
-    @media (max-width: 600px) {
-      .form-row { flex-direction: column; gap: 10px; }
-    }
+    @media (max-width: 600px) { .form-row { flex-direction: column; gap: 10px; } }
 
-    /* small utility */
     .muted { color:#666; font-size:13px; }
 
-    /* ===== ADMIN VISIBILITY TOGGLE ===== */
     .admin-only { display: none; }
     body.admin .admin-only { display: block; }
 
-    /* ===== compact edit UI for status ===== */
     .small-actions { display:inline-flex; gap:6px; align-items:center; }
     .edit-btn { padding:4px 8px; font-size:12px; border-radius:6px; cursor:pointer; background:#0d6efd; color:white; border:none; }
     .status-dropdown-compact { display:none; font-size:13px; padding:3px 6px; border-radius:6px; }
@@ -72,17 +54,13 @@
     .booking-li .meta { color:#333; font-size:14px; }
     .booking-li .meta .ref { color:#666; font-size:13px; margin-left:6px; }
     .booking-li button.cancel-button { margin-left:8px; }
-    @media (max-width:600px) {
-      .booking-li { flex-direction: column; align-items:flex-start; }
-      .small-actions { margin-top:6px; }
-    }
+    @media (max-width:600px) { .booking-li { flex-direction: column; align-items:flex-start; } .small-actions { margin-top:6px; } }
   </style>
 </head>
 <body>
   <h2>Accomm Laundry Reservation</h2>
   <div class="small">Select machine, pick a future date, then choose time (schedule depends on machine & weekday).</div>
 
-  <!-- Booking form -->
   <div class="top-row">
     <div style="flex:1">
       <label for="machine">Machine</label>
@@ -94,7 +72,6 @@
       </select>
     </div>
 
-    <!-- Name & Room grouped with spacing -->
     <div style="flex:2">
       <div class="form-row">
         <div class="field">
@@ -125,7 +102,6 @@
   <div class="error" id="errorMessage"></div>
   <button onclick="startBooking()">Book Slot</button>
 
-  <!-- Payment Dialog -->
   <dialog id="paymentDialog">
     <h3>Step 2: GCash Payment</h3>
     <p><strong>GCash Number:</strong> 0916-421-9818</p>
@@ -137,7 +113,6 @@
     </div>
   </dialog>
 
-  <!-- Confirmation Dialog -->
   <dialog id="confirmDialog">
     <h3>Step 3: Confirm Booking</h3>
     <p><strong>Machine:</strong> <span id="cMachine"></span></p>
@@ -154,7 +129,6 @@
 
   <hr>
 
-  <!-- Controls for viewing schedule -->
   <div class="controls">
     <select id="viewMachine" class="admin-only" onchange="renderBookings()">
       <option>Brothers Washer</option>
@@ -169,7 +143,6 @@
     <button id="adminLogoutBtn" onclick="logoutAdmin()" style="display:none;">🚪 Logout</button>
 
     <button id="exportCSVBtn" style="display:none; background:#007bff">Export CSV</button>
-    <!-- NEW: Send to Google Sheet (admin only; shown after login) -->
     <button id="sendToSheetBtn" style="display:none; background:#34a853">Send to Google Sheet</button>
   </div>
 
@@ -184,7 +157,6 @@
 
   <button id="resetBookingsBtn" class="reset-button" style="display:none;" onclick="resetAllBookings()">Reset All Bookings</button>
 
-  <!-- Admin Dialog -->
   <dialog id="adminDialog">
     <form method="dialog" id="adminForm">
       <h3>Admin Login</h3>
@@ -199,7 +171,7 @@
 
 <script>
 /* ====================
-   SCHEDULES (edit as needed)
+   SCHEDULES
    ==================== */
 const schedules = {
   "Brothers Washer": {
@@ -271,6 +243,25 @@ function slotStartFromRange(rangeStr) {
   return rangeStr.split("-")[0].trim();
 }
 
+/* ---------- NEW: robust 12h -> minutes + comparator ---------- */
+function parseTimeToMinutes12(label){
+  // accepts "6:00 AM" or "1:20PM" (space optional)
+  const m = label.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (!m) return 0;
+  let h = parseInt(m[1],10);
+  const min = parseInt(m[2] || "0", 10);
+  const ampm = m[3].toUpperCase();
+  if (ampm === "AM") { if (h === 12) h = 0; }
+  else { if (h !== 12) h += 12; }
+  return h*60 + min;
+}
+function compareTimeRanges(aRange, bRange){
+  const aStart = slotStartFromRange(aRange);
+  const bStart = slotStartFromRange(bRange);
+  return parseTimeToMinutes12(aStart) - parseTimeToMinutes12(bStart);
+}
+/* ------------------------------------------------------------- */
+
 /* ====================
    Week range (baseline Monday)
    ==================== */
@@ -333,7 +324,10 @@ function updateTimeSlots() {
   const now = new Date();
   const selectedDay = new Date(dateVal + "T00:00:00");
 
-  machineSchedule.forEach(slot => {
+  // ---- NEW: enforce chronological order in the dropdown
+  const sortedSlots = [...machineSchedule].sort(compareTimeRanges);
+
+  sortedSlots.forEach(slot => {
     const option = document.createElement("option");
     option.value = slot;
     option.textContent = slot;
@@ -379,7 +373,6 @@ function startBooking() {
     return;
   }
 
-  // Block same-day or past-day bookings
   const today = new Date(); const sel = new Date(date + "T00:00:00");
   today.setHours(0,0,0,0); sel.setHours(0,0,0,0);
   if (sel <= today) {
@@ -387,7 +380,6 @@ function startBooking() {
     return;
   }
 
-  // Prevent booking a time already booked for this machine
   const conflict = bookings.some(b => b.machine === machine && b.date === date && b.time === time);
   if (conflict) {
     error.textContent = "This time slot is already booked for the selected machine.";
@@ -419,7 +411,6 @@ function confirmBooking() {
   localStorage.setItem("bookings", JSON.stringify(bookings));
   document.getElementById("confirmDialog").close();
   alert("Booking confirmed!");
-  // clear form inputs
   document.getElementById("name").value = "";
   document.getElementById("room").value = "";
   document.getElementById("date").value = "";
@@ -429,8 +420,7 @@ function confirmBooking() {
 }
 
 /* ====================
-   Render weekly bookings for selected viewMachine
-   (with compact inline edit dropdown triggered by Edit button)
+   Render weekly bookings (sorted by start time)
    ==================== */
 function renderBookings() {
   const weekIndex = parseInt(document.getElementById("weekSelector").value || 0);
@@ -465,11 +455,11 @@ function renderBookings() {
     const dayBlock = document.createElement("div");
     dayBlock.appendChild(dayHeader);
 
-    // filter bookings for this date AND machine
     const dayBookings = bookings
       .map((b) => ({ ...b }))
       .filter(b => b.machine === viewMachine && b.date === ymd)
-      .sort((a,b) => a.time.localeCompare(b.time));
+      // ---- NEW: sort by the true start time, not alphabetically
+      .sort((a,b) => compareTimeRanges(a.time, b.time));
 
     if (dayBookings.length === 0) {
       const p = document.createElement("p"); p.textContent = "No bookings."; dayBlock.appendChild(p);
@@ -479,32 +469,27 @@ function renderBookings() {
         const li = document.createElement("li");
         li.className = "booking-li";
 
-        // main text
         const meta = document.createElement("div");
         meta.className = "meta";
         meta.innerHTML = `<strong>${b.time}</strong> — ${b.name} (Room ${b.room}) <span class="ref">Ref: ${b.reference || '(none)'}</span>`;
         li.appendChild(meta);
 
-        // status text
         const statusSpan = document.createElement("span");
         const statusClass = b.status.toLowerCase();
         statusSpan.className = `status-text status-${statusClass}`;
         statusSpan.textContent = b.status;
         
-        // actions container
         const actions = document.createElement("div");
         actions.className = "small-actions";
         actions.appendChild(statusSpan);
 
         if (isAdmin) {
-          // Edit button
           const editBtn = document.createElement("button");
           editBtn.className = "edit-btn";
           editBtn.type = "button";
           editBtn.textContent = "Edit";
           actions.appendChild(editBtn);
 
-          // compact select (hidden by default)
           const select = document.createElement("select");
           select.className = "status-dropdown-compact";
           ["Processing","Paid","Completed"].forEach(s => {
@@ -515,14 +500,12 @@ function renderBookings() {
           });
           actions.appendChild(select);
 
-          // Cancel booking
           const cancelBtn = document.createElement("button");
           cancelBtn.className = "cancel-button";
           cancelBtn.type = "button";
           cancelBtn.textContent = "Cancel";
           cancelBtn.onclick = () => cancelBookingById(b.id);
 
-          // Wire Edit behavior
           editBtn.onclick = () => {
             editBtn.style.display = "none";
             select.style.display = "inline-block";
@@ -556,7 +539,7 @@ function renderBookings() {
 }
 
 /* ====================
-   Admin actions: id-based ops
+   Admin actions
    ==================== */
 function cancelBookingById(id) {
   if (!isAdmin) return alert("Only admin can cancel bookings.");
@@ -575,7 +558,7 @@ function updateStatusById(id, status) {
 }
 
 /* ====================
-   Admin login/logout (show/hide admin-only UI)
+   Admin login/logout
    ==================== */
 function loginAsAdmin() {
   const dialog = document.getElementById("adminDialog");
@@ -595,7 +578,7 @@ function loginAsAdmin() {
       document.getElementById("adminLoginBtn").style.display = "none";
       document.getElementById("adminLogoutBtn").style.display = "inline-block";
       document.getElementById("exportCSVBtn").style.display = "inline-block";
-      document.getElementById("sendToSheetBtn").style.display = "inline-block"; // NEW: show send-to-sheet
+      document.getElementById("sendToSheetBtn").style.display = "inline-block";
       document.getElementById("viewMachine").value = document.getElementById("machine").value;
       renderBookings();
     } else {
@@ -611,7 +594,7 @@ function logoutAdmin() {
   document.getElementById("adminLoginBtn").style.display = "inline-block";
   document.getElementById("adminLogoutBtn").style.display = "none";
   document.getElementById("exportCSVBtn").style.display = "none";
-  document.getElementById("sendToSheetBtn").style.display = "none"; // NEW: hide send-to-sheet
+  document.getElementById("sendToSheetBtn").style.display = "none";
   renderBookings();
 }
 
@@ -623,7 +606,7 @@ function resetAllBookings() {
 }
 
 /* ====================
-   Export to CSV for admin
+   Export to CSV
    ==================== */
 document.getElementById("exportCSVBtn").addEventListener("click", () => {
   if (!isAdmin) return alert("Only admin can export.");
@@ -638,10 +621,8 @@ document.getElementById("exportCSVBtn").addEventListener("click", () => {
 });
 
 /* ====================
-   Send ALL bookings to Google Sheet (admin)
+   Send to Google Sheet
    ==================== */
-
-// Your deployed Apps Script Web App URL:
 const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwXyGrN_bVJsyPQbdp4aLmr52rkKQH8E9hYW9bfkNASVse-tkC6gpSS5FD8EYaukI-A/exec";
 
 async function sendAllBookingsToGoogleSheet() {
@@ -653,7 +634,6 @@ async function sendAllBookingsToGoogleSheet() {
   btn.textContent = "Sending…";
 
   try {
-    // To avoid CORS preflight, use text/plain; Apps Script will still parse JSON OK.
     const payload = { rows: bookings || [] };
 
     const res = await fetch(SHEET_WEBAPP_URL, {
@@ -662,7 +642,6 @@ async function sendAllBookingsToGoogleSheet() {
       body: JSON.stringify(payload)
     });
 
-    // Try to parse response (may succeed depending on CORS)
     let msg = `Sent ${payload.rows.length} row(s) to Google Sheet.`;
     try {
       const data = await res.json();
@@ -689,7 +668,6 @@ document.getElementById("machine").addEventListener("change", updateTimeSlots);
 document.getElementById("date").addEventListener("change", updateTimeSlots);
 document.getElementById("viewMachine").addEventListener("change", renderBookings);
 
-// Normalize old bookings and ensure id/status exist:
 bookings = bookings.map(b => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date)) {
     const d = new Date(b.date);
