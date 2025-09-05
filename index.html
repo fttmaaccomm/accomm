@@ -58,8 +58,8 @@
   </style>
 </head>
 <body>
-  <h2>Accomm Laundry Reservation</h2>
-  <div class="small">Select machine, pick a future date, then choose time (schedule depends on machine & weekday).</div>
+  <h2>FTTMa Accommodation Laundry Reservation</h2>
+  <div class="small">Select machine, pick a date, then choose time (schedule depends on machine & weekday).</div>
 
   <div class="top-row">
     <div style="flex:1">
@@ -139,7 +139,7 @@
 
     <select id="weekSelector" class="admin-only" onchange="renderBookings()"></select>
 
-    <button id="adminLoginBtn" onclick="loginAsAdmin()">🔐 Admin</button>
+    <button id="adminLoginBtn" onclick="loginAsAdmin()">🔐 ACM Login</button>
     <button id="adminLogoutBtn" onclick="logoutAdmin()" style="display:none;">🚪 Logout</button>
 
     <button id="exportCSVBtn" style="display:none; background:#007bff">Export CSV</button>
@@ -159,7 +159,7 @@
 
   <dialog id="adminDialog">
     <form method="dialog" id="adminForm">
-      <h3>Admin Login</h3>
+      <h3>ACM Login</h3>
       <input type="password" id="adminPassword" placeholder="Enter password" />
       <div style="text-align:right; margin-top:8px;">
         <button type="submit">Login</button>
@@ -570,7 +570,7 @@ function loginAsAdmin() {
 
   form.onsubmit = function(e) {
     e.preventDefault();
-    if (input.value === "admin123") {
+    if (input.value === "BRIDEOFCHRIST") {
       isAdmin = true;
       document.body.classList.add("admin");
       dialog.close();
@@ -623,7 +623,7 @@ document.getElementById("exportCSVBtn").addEventListener("click", () => {
 /* ====================
    Send to Google Sheet
    ==================== */
-const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwXyGrN_bVJsyPQbdp4aLmr52rkKQH8E9hYW9bfkNASVse-tkC6gpSS5FD8EYaukI-A/exec";
+const SHEET_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby7o0m-LgcstbTuc82LSTgayYUKlck27OgMfXJ5QLiujGbGKPOUmHYGXPhs5M7pptY/exec";
 
 async function sendAllBookingsToGoogleSheet() {
   if (!isAdmin) return alert("Only admin can send data.");
