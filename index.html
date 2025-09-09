@@ -102,16 +102,21 @@
   <div class="error" id="errorMessage"></div>
   <button onclick="startBooking()">Book Slot</button>
 
-  <dialog id="paymentDialog">
-    <h3>Step 2: GCash Payment</h3>
-    <p><strong>GCash Number:</strong> 0916-421-9818</p>
-    <p><img src="https://upload.wikimedia.org/wikipedia/commons/d/d0/QR_code_for_mobile_English_Wikipedia.svg" alt="QR Code" style="width:100%; max-width:250px;"></p>
-    <input type="text" id="reference" placeholder="Enter GCash Reference Number" />
-    <div style="text-align:right; margin-top: 12px;">
-      <button onclick="proceedToConfirmation()">Next</button>
-      <button class="secondary" onclick="document.getElementById('paymentDialog').close()">Cancel</button>
-    </div>
-  </dialog>
+<dialog id="paymentDialog">
+  <h3>Step 2: GCash Payment</h3>
+  <p><strong>GCash Number:</strong> 0926-289-4003</p>
+  <p>
+    <img src="https://raw.githubusercontent.com/fttmaaccomm/GCASH/refs/heads/main/GCASH.png" 
+         alt="QR Code" 
+         style="width:100%; max-width:250px;">
+  </p>
+  <input type="text" id="reference" placeholder="Enter GCash Reference Number" />
+  <div style="text-align:right; margin-top: 12px;">
+    <button onclick="proceedToConfirmation()">Next</button>
+    <button class="secondary" onclick="document.getElementById('paymentDialog').close()">Cancel</button>
+  </div>
+</dialog>
+
 
   <dialog id="confirmDialog">
     <h3>Step 3: Confirm Booking</h3>
